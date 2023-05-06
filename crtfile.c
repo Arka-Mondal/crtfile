@@ -54,6 +54,7 @@ int main(int argc, char ** argv)
     {"user", required_argument, NULL, 'u'},
     {"group", required_argument, NULL, 'g'},
     {"other", required_argument, NULL, 'o'},
+    {"all", required_argument, NULL, 'a'},
     {"verbose", no_argument, &verbose, 1},
     {NULL, 0, NULL, 0}
   };
@@ -68,7 +69,7 @@ int main(int argc, char ** argv)
   if (argc == 1)
     usage(EXIT_FAILURE);
 
-  while ((option = getopt_long(argc, argv, "vtu:g:o:", long_options, &opt_index)) != -1)
+  while ((option = getopt_long(argc, argv, "vtu:g:o:a:", long_options, &opt_index)) != -1)
   {
     switch (option)
     {
@@ -88,10 +89,11 @@ int main(int argc, char ** argv)
       case 'u':
       case 'g':
       case 'o':
+      case 'a':
         setflag(optarg, option);
         break;
       case '?':
-        if (optopt == 'u' || optopt == 'g' || optopt == 'o')
+        if (optopt == 'u' || optopt == 'g' || optopt == 'o' || optopt == 'a')
           errorexit("argument required: %s\n", argv[optind - 1]);
         else
           errorexit("unknown option: %s\n", argv[optind - 1]);
@@ -104,11 +106,7 @@ int main(int argc, char ** argv)
     errorexit("missing operand\n");
 
   if ((u_opt == 0) && (g_opt == 0) && (o_opt == 0))
-  {
-    u_opt = S_IRUSR | S_IWUSR;
-    g_opt = S_IRGRP | S_IWGRP;
-    o_opt = S_IROTH;
-  }
+    setflag("rw", 'a');
 
 
   for (; optind < argc; optind++)
@@ -177,6 +175,16 @@ void setflag(const char * restrict flag, int opt)
         o_opt |= S_IXOTH;
 
       break;
+
+    case 'a':
+      if (strchr(flag, 'r'))
+        u_opt |= S_IRUSR | S_IRGRP | S_IROTH;
+      if (strchr(flag, 'w'))
+        u_opt |= S_IWUSR | S_IWGRP | S_IWOTH;
+      if (strchr(flag, 'x'))
+        u_opt |= S_IXUSR | S_IXGRP | S_IXOTH;
+
+      break;
     default:
   }
 }
@@ -210,9 +218,11 @@ void usage(int status)
         "\t-u, --user    Permissions for user\n"
         "\t-g, --group   Permissions for group\n"
         "\t-o, --other   Permissions for other\n"
-            "\t   r       Give read permission\n"
-            "\t   w       Give write permission\n"
-            "\t   x       Give execute permission\n\n"
+        "\t-a, --all     Permissions for all users\n"
+            "\t   r       Gives read permission\n"
+            "\t   w       Gives write permission\n"
+            "\t   x       Gives execute permission\n"
+            "\t(-a, --all is the default option if nothing is specified.)\n\n"
 
         "\t-t --truncate Truncates the file(s)\n"
         "\t-v --verbose  Explain what is being done\n"
@@ -225,7 +235,7 @@ void usage(int status)
 
 void display_version(void)
 {
-  fputs("crtfile 0.1.0\n"
+  fputs("crtfile 0.2.0\n"
         "Copyright (C) 2023 Arka Mondal\n"
         "License : GNU GPL version 3 \n"
         "This program comes with ABSOLUTELY NO WARRANTY;\n"
