@@ -27,22 +27,17 @@
 #include <getopt.h>
 
 static const char * program_name = "crtfile";
-static mode_t u_opt = 0;
-static mode_t g_opt = 0;
-static mode_t o_opt = 0;
+static mode_t perm_opt = 0;
 
 void errorexit(const char *, ...) __attribute__ ((__noreturn__));
 void output_error(const char *, ...);
 void usage(int) __attribute__ ((__noreturn__));
 void display_version(void);
-mode_t constructperms(const char * const restrict, int);
-void setflag(const char * const restrict, int);
+void setperms(const char * const restrict, int);
 
 int main(int argc, char ** argv)
 {
-  extern mode_t u_opt;
-  extern mode_t g_opt;
-  extern mode_t o_opt;
+  extern mode_t perm_opt;
 
   bool if_errocr;         // checks for if error occurred
   bool is_modefound;      // checks if atleast one mode flag is found
@@ -94,13 +89,13 @@ int main(int argc, char ** argv)
       case 'o':
       case 'a':
         is_modefound = true;
-        setflag(optarg, option);
+        setperms(optarg, option);
         break;
       case '?':
         if (optopt == 'u' || optopt == 'g' || optopt == 'o' || optopt == 'a')
-          errorexit("argument required: %s\n", argv[optind - 1]);
+          errorexit("argument required: '%s'\n", argv[optind - 1]);
         else
-          errorexit("unknown option: %s\n", argv[optind - 1]);
+          errorexit("panic: unknown option: '%s'\n", argv[optind - 1]);
       default:
         usage(EXIT_FAILURE);
     }
@@ -109,14 +104,14 @@ int main(int argc, char ** argv)
   if (optind == argc)
     errorexit("missing operand\n");
 
-  if (!is_modefound && (u_opt == 0))
-    setflag("rw", 'a');
-  else if (is_modefound && (u_opt == 0))
+  if (!is_modefound && (perm_opt == 0))
+    setperms("rw", 'a');
+  else if (is_modefound && (perm_opt == 0))
     errorexit("panic: permission not set\n");
 
   for (; optind < argc; optind++)
   {
-    fd = open(argv[optind], crt_flag, u_opt | g_opt | o_opt);
+    fd = open(argv[optind], crt_flag, perm_opt);
     if (fd == -1)
     {
       output_error("file: '%s': %s\n", argv[optind], strerror(errno));
@@ -140,62 +135,52 @@ int main(int argc, char ** argv)
   return (!if_errocr) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
-void setflag(const char * restrict flag, int opt)
+void setperms(const char * const restrict perms, int user)
 {
-  extern mode_t u_opt;
-
-  u_opt |= constructperms(flag, opt);
-}
-
-mode_t constructperms(const char * const restrict perms, int user)
-{
+  extern mode_t perm_opt;
   size_t perms_len, i;
-  mode_t opts;
 
   perms_len = strlen(perms);
-  opts = 0;
 
   for (i = 0; i < perms_len; i++)
   {
-    if (perms[i] != 'r' && perms[i] != 'w' && perms[i] != 'x')
+    if ((perms[i] != 'r') && (perms[i] != 'w') && (perms[i] != 'x'))
       errorexit("panic: unrecognized permission\n");
 
     if (perms[i] == 'r')
     {
       if (user == 'u')
-        opts |= S_IRUSR;
+        perm_opt |= S_IRUSR;
       else if (user == 'g')
-        opts |= S_IRGRP;
+        perm_opt |= S_IRGRP;
       else if (user == 'o')
-        opts |= S_IROTH;
-      else if (user == 'a')
-        opts |= S_IRUSR | S_IRGRP | S_IROTH;
+        perm_opt |= S_IROTH;
+      else
+        perm_opt |= S_IRUSR | S_IRGRP | S_IROTH;
     }
     else if (perms[i] == 'w')
     {
       if (user == 'u')
-        opts |= S_IWUSR;
+        perm_opt |= S_IWUSR;
       else if (user == 'g')
-        opts |= S_IWGRP;
+        perm_opt |= S_IWGRP;
       else if (user == 'o')
-        opts |= S_IWOTH;
-      else if (user == 'a')
-        opts |= S_IWUSR | S_IWGRP | S_IWOTH;
+        perm_opt |= S_IWOTH;
+      else
+        perm_opt |= S_IWUSR | S_IWGRP | S_IWOTH;
     }
     else
     {
       if (user == 'u')
-        opts |= S_IXUSR;
+        perm_opt |= S_IXUSR;
       else if (user == 'g')
-        opts |= S_IXGRP;
+        perm_opt |= S_IXGRP;
       else if (user == 'o')
-        opts |= S_IXOTH;
-      else if (user == 'a')
-        opts |= S_IXUSR | S_IXGRP | S_IXOTH;
+        perm_opt |= S_IXOTH;
+      else
+        perm_opt |= S_IXUSR | S_IXGRP | S_IXOTH;
     }
   }
-
-  return opts;
 }
 
 void errorexit(const char * format, ...)
@@ -247,7 +232,7 @@ void usage(int status)
 
 void display_version(void)
 {
-  fputs("crtfile 0.3.1\n"
+  fputs("crtfile 0.4.0\n"
         "Copyright (C) 2023 Arka Mondal\n"
         "License : GNU GPL version 3 \n"
         "This program comes with ABSOLUTELY NO WARRANTY;\n"
