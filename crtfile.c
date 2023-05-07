@@ -35,7 +35,8 @@ void errorexit(const char *, ...) __attribute__ ((__noreturn__));
 void output_error(const char *, ...);
 void usage(int) __attribute__ ((__noreturn__));
 void display_version(void);
-void setflag(const char * restrict, int);
+mode_t constructperms(const char * const restrict, int);
+void setflag(const char * const restrict, int);
 
 int main(int argc, char ** argv)
 {
@@ -43,7 +44,8 @@ int main(int argc, char ** argv)
   extern mode_t g_opt;
   extern mode_t o_opt;
 
-  bool if_errocr;    // checks for if error occurred
+  bool if_errocr;         // checks for if error occurred
+  bool is_modefound;      // checks if atleast one mode flag is found
   int opt_index, option, crt_flag, fd;
   static int verbose;
 
@@ -60,6 +62,7 @@ int main(int argc, char ** argv)
   };
 
   if_errocr = false;
+  is_modefound = false;
   errno = 0;
   opt_index = 0;
   opterr = 0;
@@ -90,6 +93,7 @@ int main(int argc, char ** argv)
       case 'g':
       case 'o':
       case 'a':
+        is_modefound = true;
         setflag(optarg, option);
         break;
       case '?':
@@ -105,9 +109,10 @@ int main(int argc, char ** argv)
   if (optind == argc)
     errorexit("missing operand\n");
 
-  if ((u_opt == 0) && (g_opt == 0) && (o_opt == 0))
+  if (!is_modefound && (u_opt == 0))
     setflag("rw", 'a');
-
+  else if (is_modefound && (u_opt == 0))
+    errorexit("panic: permission not set\n");
 
   for (; optind < argc; optind++)
   {
@@ -138,55 +143,59 @@ int main(int argc, char ** argv)
 void setflag(const char * restrict flag, int opt)
 {
   extern mode_t u_opt;
-  extern mode_t g_opt;
-  extern mode_t o_opt;
 
+  u_opt |= constructperms(flag, opt);
+}
 
-  if (strlen(flag) > 3)
-    errorexit("argument: %s  too long\n", flag);
+mode_t constructperms(const char * const restrict perms, int user)
+{
+  size_t perms_len, i;
+  mode_t opts;
 
-  switch (opt)
+  perms_len = strlen(perms);
+  opts = 0;
+
+  for (i = 0; i < perms_len; i++)
   {
-    case 'u':
-      if (strchr(flag, 'r'))
-        u_opt |= S_IRUSR;
-      if (strchr(flag, 'w'))
-        u_opt |= S_IWUSR;
-      if (strchr(flag, 'x'))
-        u_opt |= S_IXUSR;
+    if (perms[i] != 'r' && perms[i] != 'w' && perms[i] != 'x')
+      errorexit("panic: unrecognized permission\n");
 
-      break;
-    case 'g':
-      if (strchr(flag, 'r'))
-        g_opt |= S_IRGRP;
-      if (strchr(flag, 'w'))
-        g_opt |= S_IWGRP;
-      if (strchr(flag, 'x'))
-        g_opt |= S_IXGRP;
-
-      break;
-
-    case 'o':
-      if (strchr(flag, 'r'))
-        o_opt |= S_IROTH;
-      if (strchr(flag, 'w'))
-        o_opt |= S_IWOTH;
-      if (strchr(flag, 'x'))
-        o_opt |= S_IXOTH;
-
-      break;
-
-    case 'a':
-      if (strchr(flag, 'r'))
-        u_opt |= S_IRUSR | S_IRGRP | S_IROTH;
-      if (strchr(flag, 'w'))
-        u_opt |= S_IWUSR | S_IWGRP | S_IWOTH;
-      if (strchr(flag, 'x'))
-        u_opt |= S_IXUSR | S_IXGRP | S_IXOTH;
-
-      break;
-    default:
+    if (perms[i] == 'r')
+    {
+      if (user == 'u')
+        opts |= S_IRUSR;
+      else if (user == 'g')
+        opts |= S_IRGRP;
+      else if (user == 'o')
+        opts |= S_IROTH;
+      else if (user == 'a')
+        opts |= S_IRUSR | S_IRGRP | S_IROTH;
+    }
+    else if (perms[i] == 'w')
+    {
+      if (user == 'u')
+        opts |= S_IWUSR;
+      else if (user == 'g')
+        opts |= S_IWGRP;
+      else if (user == 'o')
+        opts |= S_IWOTH;
+      else if (user == 'a')
+        opts |= S_IWUSR | S_IWGRP | S_IWOTH;
+    }
+    else
+    {
+      if (user == 'u')
+        opts |= S_IXUSR;
+      else if (user == 'g')
+        opts |= S_IXGRP;
+      else if (user == 'o')
+        opts |= S_IXOTH;
+      else if (user == 'a')
+        opts |= S_IXUSR | S_IXGRP | S_IXOTH;
+    }
   }
+
+  return opts;
 }
 
 void errorexit(const char * format, ...)
@@ -213,29 +222,32 @@ void output_error(const char * format, ...)
 
 void usage(int status)
 {
-  fputs("Usage: crtfile [OPTION]... FILE...\n"
+  fputs("Usage: crtfile [OPTION]... [MODE]... FILE...\n"
+        "Apply MODE to each FILE.\n"
         "Mandatory arguments to long options are mandatory for short option too.\n\n"
-        "\t-u, --user    Permissions for user\n"
-        "\t-g, --group   Permissions for group\n"
-        "\t-o, --other   Permissions for other\n"
-        "\t-a, --all     Permissions for all users\n"
-            "\t   r       Gives read permission\n"
-            "\t   w       Gives write permission\n"
-            "\t   x       Gives execute permission\n"
-            "\t(-a, --all is the default option if nothing is specified.)\n\n"
+        "    -t, --truncate Truncates the file(s)\n"
+        "    -v, --verbose  Explain what is being done\n"
+        "        --version     Output the version information and exit\n"
+        "        --help        Output help and exit\n\n"
 
-        "\t-t --truncate Truncates the file(s)\n"
-        "\t-v --verbose  Explain what is being done\n"
-
-        "\t--version     Output the version information and exit\n"
-        "\t--help        Output help and exit\n", stdout);
+        "MODE can be selected from the following options :\n"
+        "    -u, --user    Permissions for user\n"
+        "    -g, --group   Permissions for group\n"
+        "    -o, --other   Permissions for other\n"
+        "    -a, --all     Permissions for all users\n"
+        "      r       Gives read permission\n"
+        "      w       Gives write permission\n"
+        "      x       Gives execute permission\n"
+        "     (-a, --all is the default mode and 'rw' is the default permission "
+        "if nothing is specified.)\n\n"
+        "Each MODE is form of '([ugoa][rwx]+)+'\n", stdout);
 
   exit(status);
 }
 
 void display_version(void)
 {
-  fputs("crtfile 0.2.0\n"
+  fputs("crtfile 0.3.1\n"
         "Copyright (C) 2023 Arka Mondal\n"
         "License : GNU GPL version 3 \n"
         "This program comes with ABSOLUTELY NO WARRANTY;\n"
