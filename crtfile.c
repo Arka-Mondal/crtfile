@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <getopt.h>
 
 static const char * program_name = "crtfile";
@@ -52,6 +53,7 @@ int main(int argc, char ** argv)
     {"group", required_argument, NULL, 'g'},
     {"other", required_argument, NULL, 'o'},
     {"all", required_argument, NULL, 'a'},
+    {"absolute", no_argument, NULL, 'A'},
     {"verbose", no_argument, &verbose, 1},
     {NULL, 0, NULL, 0}
   };
@@ -67,7 +69,7 @@ int main(int argc, char ** argv)
   if (argc == 1)
     usage(EXIT_FAILURE);
 
-  while ((option = getopt_long(argc, argv, "vtu:g:o:a:", long_options, &opt_index)) != -1)
+  while ((option = getopt_long(argc, argv, "vtAu:g:o:a:", long_options, &opt_index)) != -1)
   {
     switch (option)
     {
@@ -81,6 +83,9 @@ int main(int argc, char ** argv)
         break;
       case 'v':
         verbose = 1;
+        break;
+      case 'A':
+        umask(0);
         break;
       case 0:
         break;
@@ -210,10 +215,13 @@ void usage(int status)
   fputs("Usage: crtfile [OPTION]... [MODE]... FILE...\n"
         "Apply MODE to each FILE.\n"
         "Mandatory arguments to long options are mandatory for short option too.\n\n"
-        "    -t, --truncate Truncates the file(s)\n"
-        "    -v, --verbose  Explain what is being done\n"
-        "        --version     Output the version information and exit\n"
-        "        --help        Output help and exit\n\n"
+        "    -t, --truncate   Truncates the file(s)\n"
+        "    -A, --absolute   'umask' value is ignored while setting the file permission\n"
+        "    -v, --verbose    Explain what is being done\n"
+        "        --version    Output the version information and exit\n"
+        "        --help       Output help and exit\n\n"
+        "if -t (or --truncate) is specified then MODE is ignored and instead of\n"
+        "file creation, file is truncated if exists.\n\n"
 
         "MODE can be selected from the following options :\n"
         "    -u, --user    Permissions for user\n"
@@ -222,17 +230,17 @@ void usage(int status)
         "    -a, --all     Permissions for all users\n"
         "      r       Gives read permission\n"
         "      w       Gives write permission\n"
-        "      x       Gives execute permission\n"
-        "     (-a, --all is the default mode and 'rw' is the default permission "
-        "if nothing is specified.)\n\n"
-        "Each MODE is form of '([ugoa][rwx]+)+'\n", stdout);
+        "      x       Gives execute permission\n\n"
+        "-a (or --all) is the default mode and 'rw' is the default permission "
+        "if nothing is specified.\n\n"
+        "Each MODE is form of '([ugoa][rwx]+)'\n", stdout);
 
   exit(status);
 }
 
 void display_version(void)
 {
-  fputs("crtfile 0.4.0\n"
+  fputs("crtfile 0.8.0\n"
         "Copyright (C) 2023 Arka Mondal\n"
         "License : GNU GPL version 3 \n"
         "This program comes with ABSOLUTELY NO WARRANTY;\n"
